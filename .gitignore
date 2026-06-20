@@ -1,0 +1,24 @@
+# Build artifacts
+bin/
+*.so
+*.dylib
+*.dll
+*.h
+
+# Go workspace/cache artifacts
+vendor/
+go.work
+go.work.sum
+
+# Test and coverage output
+*.test
+*.out
+coverage.*
+
+# Local environment and editor files
+.env
+.env.*
+.DS_Store
+.idea/
+.vscode/
+

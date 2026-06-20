@@ -1,0 +1,14 @@
+plugins:
+  enabled: true
+  dir: "plugins"
+  configs:
+    selective-router:
+      enabled: true
+      priority: 50
+      route_provider: "codex"
+      route_model: "gpt-5.5"
+      models: []
+      excluded_models: []
+      route_compact: true
+      route_web_search: true
+      route_vision: true
