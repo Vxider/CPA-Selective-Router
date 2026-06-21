@@ -73,9 +73,11 @@ type pluginConfig struct {
 	Enabled              bool     `yaml:"enabled"`
 	RouteProvider        string   `yaml:"route_provider"`
 	RouteModel           string   `yaml:"route_model"`
+	ImageRouteProvider   string   `yaml:"image_route_provider"`
+	ImageProvider        string   `yaml:"image_provider"`
 	ImageToolModel       string   `yaml:"image_tool_model"`
-	ImageRouteOverride   bool     `yaml:"image_route_override"`
 	RouteCompact         bool     `yaml:"route_compact"`
+	RouteAutoReview      bool     `yaml:"route_auto_review"`
 	RouteWebSearch       bool     `yaml:"route_web_search"`
 	RouteVision          bool     `yaml:"route_vision"`
 	RouteImageGeneration bool     `yaml:"route_image_generation"`
@@ -181,12 +183,17 @@ func configure(raw []byte) error {
 	}
 	cfg.RouteProvider = strings.TrimSpace(cfg.RouteProvider)
 	cfg.RouteModel = strings.TrimSpace(cfg.RouteModel)
+	cfg.ImageRouteProvider = strings.TrimSpace(cfg.ImageRouteProvider)
+	cfg.ImageProvider = strings.TrimSpace(cfg.ImageProvider)
 	cfg.ImageToolModel = strings.TrimSpace(cfg.ImageToolModel)
 	if cfg.RouteProvider == "" {
 		cfg.RouteProvider = "codex"
 	}
 	if cfg.RouteModel == "" {
 		cfg.RouteModel = "gpt-5.5"
+	}
+	if cfg.ImageRouteProvider == "" {
+		cfg.ImageRouteProvider = cfg.ImageProvider
 	}
 	if cfg.ImageToolModel == "" {
 		cfg.ImageToolModel = "gpt-image-2"
@@ -201,8 +208,8 @@ func defaultPluginConfig() pluginConfig {
 		RouteProvider:        "codex",
 		RouteModel:           "gpt-5.5",
 		ImageToolModel:       "gpt-image-2",
-		ImageRouteOverride:   false,
 		RouteCompact:         true,
+		RouteAutoReview:      true,
 		RouteWebSearch:       true,
 		RouteVision:          true,
 		RouteImageGeneration: true,
@@ -231,14 +238,15 @@ func pluginRegistration() registration {
 				{Name: "enabled", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Enable capability-based route conversion."},
 				{Name: "route_provider", Type: pluginapi.ConfigFieldTypeString, Description: "Provider used for direct model_router route conversion."},
 				{Name: "route_model", Type: pluginapi.ConfigFieldTypeString, Description: "Target model used for direct model_router route conversion."},
+				{Name: "image_route_provider", Type: pluginapi.ConfigFieldTypeString, Description: "Provider used only for image-generation route override. Legacy alias: image_provider."},
 				{Name: "image_tool_model", Type: pluginapi.ConfigFieldTypeString, Description: "Model used by the injected image_generation tool. Default: gpt-image-2."},
-				{Name: "image_route_override", Type: pluginapi.ConfigFieldTypeBoolean, Description: "When true, route image generation requests to route_provider/route_model. Default: false."},
 				{Name: "models", Type: pluginapi.ConfigFieldTypeArray, Description: "Requested model allowlist. Empty means all models. Supports '*' wildcards, e.g. model-*."},
 				{Name: "excluded_models", Type: pluginapi.ConfigFieldTypeArray, Description: "Requested model denylist. Takes precedence over models. Supports '*' wildcards, e.g. model-*."},
 				{Name: "route_compact", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Route matching compact response requests to route_provider/route_model. Default: true."},
+				{Name: "route_auto_review", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Route Codex auto-review reviewer requests to route_provider/route_model. Matches X-OpenAI-Subagent: guardian and codex-auto-review. Default: true."},
 				{Name: "route_web_search", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Route matching web search requests to route_provider/route_model. Also injects a native web_search tool for matching response requests with search intent."},
 				{Name: "route_vision", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Route matching requests with image input to the configured capability route."},
-				{Name: "route_image_generation", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Inject image_generation tool for explicit image generation requests; can route to route_provider/route_model when image_route_override is true."},
+				{Name: "route_image_generation", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Inject image_generation tool for explicit image generation requests. When image_route_provider is set, image requests are routed to that provider using route_model."},
 			},
 		},
 		Capabilities: registrationCapability{
@@ -260,12 +268,16 @@ func normalizeRequest(raw []byte) ([]byte, error) {
 			body = injected
 		}
 	}
-	if cfg.Enabled && cfg.RouteImageGeneration && modelAllowed(req.Model, cfg) && isResponseTransformCandidate(req) {
+	if cfg.Enabled && cfg.RouteImageGeneration && imageGenerationInjectionAllowed(cfg) && modelAllowed(req.Model, cfg) && isResponseTransformCandidate(req) {
 		if injected, changed := injectImageGenerationTool(body, cfg); changed {
 			body = injected
 		}
 	}
 	return okEnvelope(pluginapi.PayloadResponse{Body: body})
+}
+
+func imageGenerationInjectionAllowed(cfg pluginConfig) bool {
+	return true
 }
 
 func routeModel(raw []byte) ([]byte, error) {
@@ -278,7 +290,7 @@ func routeModel(raw []byte) ([]byte, error) {
 		debugRoute(req, cfg, "disabled", false)
 		return okEnvelope(pluginapi.ModelRouteResponse{Handled: false})
 	}
-	if !modelAllowed(req.RequestedModel, cfg) {
+	if !routeModelAllowed(req, cfg) {
 		debugRoute(req, cfg, "model_not_allowed", false)
 		return okEnvelope(pluginapi.ModelRouteResponse{Handled: false})
 	}
@@ -312,7 +324,7 @@ func debugRoute(req rpcModelRouteRequest, cfg pluginConfig, reason string, handl
 		targetProvider = ""
 		targetModel = ""
 	}
-	_, _ = fmt.Fprintf(os.Stderr, "selective-router route_debug handled=%t reason=%s requested_model=%s target_provider=%s target_model=%s source=%s stream=%t response_candidate=%t compact=%t web_search=%t vision=%t body_shape=%s\n",
+	_, _ = fmt.Fprintf(os.Stderr, "selective-router route_debug handled=%t reason=%s requested_model=%s target_provider=%s target_model=%s source=%s stream=%t response_candidate=%t compact=%t auto_review=%t web_search=%t vision=%t body_shape=%s\n",
 		handled,
 		reason,
 		strings.TrimSpace(req.RequestedModel),
@@ -322,6 +334,7 @@ func debugRoute(req rpcModelRouteRequest, cfg pluginConfig, reason string, handl
 		req.Stream,
 		isResponseRouteCandidate(req),
 		isCompactResponseRequest(req),
+		isAutoReviewRequest(req),
 		hasWebSearchRouteSignal(req.Body),
 		hasImageInput(req.Body) || hasVisionTool(req.Body) || hasImagePathMention(req.Body),
 		summarizeBodyShape(req.Body),
@@ -340,11 +353,30 @@ func hasProvider(providers []string, key string) bool {
 
 func modelAllowed(model string, cfg pluginConfig) bool {
 	model = strings.TrimSpace(model)
+	if modelExcluded(model, cfg) {
+		return false
+	}
+	return modelAllowedByAllowlist(model, cfg)
+}
+
+func routeModelAllowed(req rpcModelRouteRequest, cfg pluginConfig) bool {
+	model := strings.TrimSpace(req.RequestedModel)
+	if modelAllowed(model, cfg) {
+		return true
+	}
+	return cfg.RouteAutoReview && isGuardianSubagent(req.Headers) && !modelExcluded(model, cfg)
+}
+
+func modelExcluded(model string, cfg pluginConfig) bool {
 	for _, pattern := range cfg.ExcludedModels {
 		if wildcardMatch(strings.TrimSpace(pattern), model) {
-			return false
+			return true
 		}
 	}
+	return false
+}
+
+func modelAllowedByAllowlist(model string, cfg pluginConfig) bool {
 	allowPatterns := trimmedNonEmpty(cfg.Models)
 	if len(allowPatterns) == 0 {
 		return true

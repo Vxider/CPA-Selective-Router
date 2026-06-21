@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/tidwall/gjson"
@@ -29,11 +30,14 @@ func routeTargetForRequest(req rpcModelRouteRequest, cfg pluginConfig) (bool, st
 	if cfg.RouteCompact && isCompactResponseRequest(req) {
 		return true, cfg.RouteProvider, cfg.RouteModel
 	}
+	if cfg.RouteAutoReview && isAutoReviewRequest(req) {
+		return true, cfg.RouteProvider, cfg.RouteModel
+	}
 	if len(req.Body) == 0 {
 		return false, "", ""
 	}
-	if cfg.RouteImageGeneration && cfg.ImageRouteOverride && hasImageGenerationRouteSignal(req.Body) {
-		return true, cfg.RouteProvider, cfg.RouteModel
+	if cfg.RouteImageGeneration && strings.TrimSpace(cfg.ImageRouteProvider) != "" && hasImageGenerationRouteSignal(req.Body) {
+		return imageRouteTarget(cfg)
 	}
 	if cfg.RouteWebSearch && hasWebSearchRouteSignal(req.Body) {
 		return true, cfg.RouteProvider, cfg.RouteModel
@@ -42,6 +46,26 @@ func routeTargetForRequest(req rpcModelRouteRequest, cfg pluginConfig) (bool, st
 		return true, cfg.RouteProvider, cfg.RouteModel
 	}
 	return false, "", ""
+}
+
+func imageRouteTarget(cfg pluginConfig) (bool, string, string) {
+	provider := strings.TrimSpace(cfg.ImageRouteProvider)
+	if provider == "" {
+		return false, "", ""
+	}
+	return true, provider, cfg.RouteModel
+}
+
+func isAutoReviewRequest(req rpcModelRouteRequest) bool {
+	return isGuardianSubagent(req.Headers) || isAutoReviewModel(req.RequestedModel) || isAutoReviewModel(gjson.GetBytes(req.Body, "model").String())
+}
+
+func isGuardianSubagent(headers http.Header) bool {
+	return strings.EqualFold(strings.TrimSpace(headers.Get("X-OpenAI-Subagent")), "guardian")
+}
+
+func isAutoReviewModel(model string) bool {
+	return strings.EqualFold(strings.TrimSpace(model), "codex-auto-review")
 }
 
 func isResponseRouteCandidate(req rpcModelRouteRequest) bool {
@@ -395,21 +419,35 @@ func isImageGenerationContinuationString(value string) bool {
 	if containsAny(lower, "报错", "错误", "插件", "tool", "工具", "无法", "不能", "失败", "error", "plugin") {
 		return false
 	}
-	return containsAny(lower,
+	// Unambiguous continuations: explicit counter or regenerate verbs.
+	if containsAny(lower,
 		"再来一张",
-		"再生成",
-		"继续生成",
-		"再画",
-		"换成",
-		"改成",
-		"换一个",
-		"另一张",
-		"more like this",
-		"another one",
+		"再画一张",
+		"再生成一张",
+		"继续生成一张",
+		"再来一个",
 		"generate another",
 		"make another",
-		"try again",
-		"change it to",
+		"another one",
+		"more like this",
+	) {
+		return true
+	}
+	// Ambiguous verbs (换成/改成/换一个/try again/change it to) only count as image
+	// continuation when paired with an image/color/style noun, so ordinary UI edits
+	// like "改成只有输入框悬浮的样式" no longer reroute to the image-capable model.
+	hasVerb := containsAny(lower, "换成", "改成", "换一个", "再画", "再生成", "继续生成", "try again", "change it to")
+	if !hasVerb {
+		return false
+	}
+	return containsAny(lower,
+		// image nouns (Chinese)
+		"图片", "图像", "一张图", "插画", "海报", "头像", "张", "图",
+		// colors
+		"红", "蓝", "绿", "黄", "紫", "黑", "白", "灰", "粉", "橙", "色",
+		// english
+		"image", "picture", "illustration", "poster", "avatar", "color", "colour", "style",
+		"red", "blue", "green", "yellow", "purple", "black", "white", "gray", "grey", "pink",
 	)
 }
 

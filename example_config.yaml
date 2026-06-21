@@ -7,11 +7,12 @@ plugins:
       priority: 50
       route_provider: "codex"
       route_model: "gpt-5.5"
+      image_route_provider: ""
       image_tool_model: "gpt-image-2"
-      image_route_override: false
       models: []
       excluded_models: []
       route_compact: true
+      route_auto_review: true
       route_web_search: true
       route_vision: true
       route_image_generation: true

@@ -2,10 +2,137 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
 	"testing"
 
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginapi"
 )
+
+func TestRouteModelOpenAIResponsesAutoReviewGuardianHeader(t *testing.T) {
+	currentConfig.Store(pluginConfig{
+		Enabled:         true,
+		RouteProvider:   "codex",
+		RouteModel:      "gpt-5.5",
+		RouteAutoReview: true,
+		Models:          []string{"gpt-5.4-mini"},
+	})
+
+	resp := routeForTest(t, rpcModelRouteRequest{
+		ModelRouteRequest: pluginapi.ModelRouteRequest{
+			SourceFormat:       "openai-response",
+			RequestedModel:     "gpt-5.4-mini",
+			AvailableProviders: []string{"codex"},
+			Headers:            http.Header{"X-Openai-Subagent": []string{"guardian"}},
+			Body:               []byte(`{"model":"gpt-5.4-mini","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"review this approval"}]}]}`),
+		},
+	})
+
+	if !resp.Handled {
+		t.Fatalf("Handled = false, want true")
+	}
+	if resp.TargetKind != pluginapi.ModelRouteTargetProvider || resp.Target != "codex" || resp.TargetModel != "gpt-5.5" {
+		t.Fatalf("route = %#v, want provider codex/gpt-5.5", resp)
+	}
+}
+
+func TestRouteModelOpenAIResponsesAutoReviewModelFallback(t *testing.T) {
+	currentConfig.Store(pluginConfig{
+		Enabled:         true,
+		RouteProvider:   "codex",
+		RouteModel:      "gpt-5.5",
+		RouteAutoReview: true,
+		Models:          []string{"codex-auto-review"},
+	})
+
+	resp := routeForTest(t, rpcModelRouteRequest{
+		ModelRouteRequest: pluginapi.ModelRouteRequest{
+			SourceFormat:       "openai-response",
+			RequestedModel:     "codex-auto-review",
+			AvailableProviders: []string{"codex"},
+			Body:               []byte(`{"model":"codex-auto-review","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"assess approval request"}]}]}`),
+		},
+	})
+
+	if !resp.Handled {
+		t.Fatalf("Handled = false, want true")
+	}
+	if resp.TargetKind != pluginapi.ModelRouteTargetProvider || resp.Target != "codex" || resp.TargetModel != "gpt-5.5" {
+		t.Fatalf("route = %#v, want provider codex/gpt-5.5", resp)
+	}
+}
+
+func TestRouteModelOpenAIResponsesAutoReviewDisabled(t *testing.T) {
+	currentConfig.Store(pluginConfig{
+		Enabled:         true,
+		RouteProvider:   "codex",
+		RouteModel:      "gpt-5.5",
+		RouteAutoReview: false,
+		Models:          []string{"gpt-5.4-mini"},
+	})
+
+	resp := routeForTest(t, rpcModelRouteRequest{
+		ModelRouteRequest: pluginapi.ModelRouteRequest{
+			SourceFormat:       "openai-response",
+			RequestedModel:     "gpt-5.4-mini",
+			AvailableProviders: []string{"codex"},
+			Headers:            http.Header{"X-Openai-Subagent": []string{"guardian"}},
+			Body:               []byte(`{"model":"gpt-5.4-mini","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"review this approval"}]}]}`),
+		},
+	})
+
+	if resp.Handled {
+		t.Fatalf("Handled = true, want false when route_auto_review is disabled")
+	}
+}
+
+func TestRouteModelOpenAIResponsesAutoReviewHeaderBypassesAllowlist(t *testing.T) {
+	currentConfig.Store(pluginConfig{
+		Enabled:         true,
+		RouteProvider:   "codex",
+		RouteModel:      "gpt-5.5",
+		RouteAutoReview: true,
+		Models:          []string{"gpt-5.4"},
+	})
+
+	resp := routeForTest(t, rpcModelRouteRequest{
+		ModelRouteRequest: pluginapi.ModelRouteRequest{
+			SourceFormat:       "openai-response",
+			RequestedModel:     "gpt-5.4-mini",
+			AvailableProviders: []string{"codex"},
+			Headers:            http.Header{"X-Openai-Subagent": []string{"guardian"}},
+			Body:               []byte(`{"model":"gpt-5.4-mini","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"review this approval"}]}]}`),
+		},
+	})
+
+	if !resp.Handled {
+		t.Fatalf("Handled = false, want true for guardian header even when requested model is outside allowlist")
+	}
+}
+
+func TestRouteModelOpenAIResponsesAutoReviewHeaderRespectsDenylist(t *testing.T) {
+	currentConfig.Store(pluginConfig{
+		Enabled:         true,
+		RouteProvider:   "codex",
+		RouteModel:      "gpt-5.5",
+		RouteAutoReview: true,
+		Models:          []string{"gpt-5.4"},
+		ExcludedModels:  []string{"gpt-5.4-mini"},
+	})
+
+	resp := routeForTest(t, rpcModelRouteRequest{
+		ModelRouteRequest: pluginapi.ModelRouteRequest{
+			SourceFormat:       "openai-response",
+			RequestedModel:     "gpt-5.4-mini",
+			AvailableProviders: []string{"codex"},
+			Headers:            http.Header{"X-Openai-Subagent": []string{"guardian"}},
+			Body:               []byte(`{"model":"gpt-5.4-mini","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"review this approval"}]}]}`),
+		},
+	})
+
+	if resp.Handled {
+		t.Fatalf("Handled = true, want false when requested model is explicitly denied")
+	}
+}
 
 func TestRouteModelOpenAIResponsesWebSearch(t *testing.T) {
 	currentConfig.Store(pluginConfig{
@@ -457,17 +584,17 @@ func TestRouteModelOpenAIResponsesImageGenerationIntentDoesNotRouteByDefault(t *
 	})
 
 	if resp.Handled {
-		t.Fatalf("Handled = true, want false when image_route_override is false")
+		t.Fatalf("Handled = true, want false when image_route_provider is empty")
 	}
 }
 
-func TestRouteModelOpenAIResponsesImageGenerationIntentRoutesWhenOverrideEnabled(t *testing.T) {
+func TestRouteModelOpenAIResponsesImageGenerationIntentRoutesWithImageProvider(t *testing.T) {
 	currentConfig.Store(pluginConfig{
 		Enabled:              true,
 		RouteProvider:        "cliproxyapi",
 		RouteModel:           "gpt-5.4",
+		ImageRouteProvider:   "image-capable-codex",
 		ImageToolModel:       "gpt-image-2",
-		ImageRouteOverride:   true,
 		RouteImageGeneration: true,
 		Models:               []string{"gpt-5.4-mini"},
 	})
@@ -476,7 +603,7 @@ func TestRouteModelOpenAIResponsesImageGenerationIntentRoutesWhenOverrideEnabled
 		ModelRouteRequest: pluginapi.ModelRouteRequest{
 			SourceFormat:       "openai-response",
 			RequestedModel:     "gpt-5.4-mini",
-			AvailableProviders: []string{"cliproxyapi"},
+			AvailableProviders: []string{"cliproxyapi", "image-capable-codex"},
 			Body:               []byte(`{"model":"gpt-5.4-mini","input":"生成一张赛博朋克城市夜景图片"}`),
 		},
 	})
@@ -484,18 +611,18 @@ func TestRouteModelOpenAIResponsesImageGenerationIntentRoutesWhenOverrideEnabled
 	if !resp.Handled {
 		t.Fatalf("Handled = false, want true")
 	}
-	if resp.Target != "cliproxyapi" || resp.TargetModel != "gpt-5.4" {
-		t.Fatalf("route = %#v, want provider cliproxyapi/gpt-5.4", resp)
+	if resp.Target != "image-capable-codex" || resp.TargetModel != "gpt-5.4" {
+		t.Fatalf("route = %#v, want provider image-capable-codex/gpt-5.4", resp)
 	}
 }
 
-func TestRouteModelOpenAIResponsesImageGenerationFollowupRoutesWhenOverrideEnabled(t *testing.T) {
+func TestRouteModelOpenAIResponsesImageGenerationFollowupRoutesWithImageProvider(t *testing.T) {
 	currentConfig.Store(pluginConfig{
 		Enabled:              true,
 		RouteProvider:        "codex",
 		RouteModel:           "gpt-5.5",
+		ImageRouteProvider:   "image-capable-codex",
 		ImageToolModel:       "gpt-image-2",
-		ImageRouteOverride:   true,
 		RouteImageGeneration: true,
 		Models:               []string{"gpt-5.4"},
 	})
@@ -504,7 +631,7 @@ func TestRouteModelOpenAIResponsesImageGenerationFollowupRoutesWhenOverrideEnabl
 		ModelRouteRequest: pluginapi.ModelRouteRequest{
 			SourceFormat:       "openai-response",
 			RequestedModel:     "gpt-5.4",
-			AvailableProviders: []string{"codex"},
+			AvailableProviders: []string{"codex", "image-capable-codex"},
 			Body: []byte(`{
 				"model":"gpt-5.4",
 				"input":[
@@ -519,8 +646,51 @@ func TestRouteModelOpenAIResponsesImageGenerationFollowupRoutesWhenOverrideEnabl
 	if !resp.Handled {
 		t.Fatalf("Handled = false, want true")
 	}
-	if resp.Target != "codex" || resp.TargetModel != "gpt-5.5" {
-		t.Fatalf("route = %#v, want provider codex/gpt-5.5", resp)
+	if resp.Target != "image-capable-codex" || resp.TargetModel != "gpt-5.5" {
+		t.Fatalf("route = %#v, want provider image-capable-codex/gpt-5.5", resp)
+	}
+}
+
+func TestRouteModelImageGenerationOverrideUsesImageRouteTarget(t *testing.T) {
+	currentConfig.Store(pluginConfig{
+		Enabled:              true,
+		RouteModel:           "gpt-5.5",
+		ImageRouteProvider:   "image-capable-codex",
+		RouteImageGeneration: true,
+		Models:               []string{"gpt-5.4-mini"},
+	})
+
+	resp := routeForTest(t, rpcModelRouteRequest{
+		ModelRouteRequest: pluginapi.ModelRouteRequest{
+			SourceFormat:       "openai-response",
+			RequestedModel:     "gpt-5.4-mini",
+			AvailableProviders: []string{"image-capable-codex"},
+			Body:               []byte(`{"model":"gpt-5.4-mini","input":"生成一张产品头像图片"}`),
+		},
+	})
+
+	if !resp.Handled {
+		t.Fatalf("Handled = false, want true")
+	}
+	if resp.Target != "image-capable-codex" || resp.TargetModel != "gpt-5.5" {
+		t.Fatalf("route = %#v, want provider image-capable-codex/gpt-5.5", resp)
+	}
+}
+
+func TestConfigureMapsLegacyImageProviderAlias(t *testing.T) {
+	raw, err := json.Marshal(lifecycleRequest{ConfigYAML: []byte(`
+enabled: true
+image_provider: image-capable-codex
+`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := configure(raw); err != nil {
+		t.Fatal(err)
+	}
+	cfg := loadedConfig()
+	if cfg.ImageRouteProvider != "image-capable-codex" {
+		t.Fatalf("image route provider = %q, want image-capable-codex", cfg.ImageRouteProvider)
 	}
 }
 
@@ -848,4 +1018,41 @@ func routeForTest(t *testing.T, req rpcModelRouteRequest) pluginapi.ModelRouteRe
 		t.Fatal(err)
 	}
 	return resp
+}
+
+// Regression: a plain UI edit instruction containing "改成" must NOT be treated
+// as an image-generation continuation, even when recent history holds an
+// image_generation tool call. Previously "改成只有输入框悬浮的样式" rerouted
+// ordinary requests to route_model (gpt-5.5).
+func TestRouteModelImageGenContinuationAmbiguousUIEditNotRouted(t *testing.T) {
+	currentConfig.Store(pluginConfig{
+		Enabled:              true,
+		RouteProvider:        "codex",
+		RouteModel:           "gpt-5.5",
+		ImageRouteProvider:   "codex",
+		RouteImageGeneration: true,
+		Models:               []string{"gpt-5.4"},
+	})
+
+	resp := routeForTest(t, rpcModelRouteRequest{
+		ModelRouteRequest: pluginapi.ModelRouteRequest{
+			SourceFormat:       "openai-response",
+			RequestedModel:     "gpt-5.4",
+			AvailableProviders: []string{"codex"},
+			Body: []byte(`{
+				"model":"gpt-5.4",
+				"input":[
+					{"type":"message","role":"user","content":[{"type":"input_text","text":"生成一张红色小猫图片"}]},
+					{"type":"function_call","name":"image_generation"},
+					{"type":"function_call_output","call_id":"c1","output":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"abc"}}]},
+					{"type":"message","role":"assistant","content":[{"type":"output_text","text":"已生成。"}]},
+					{"type":"message","role":"user","content":[{"type":"input_text","text":"改成只有输入框悬浮的样式，然后样式和搜索框的样式统一对齐行。"}]}
+				]
+			}`),
+		},
+	})
+
+	if resp.Handled {
+		t.Fatalf("Handled = true, want false for ordinary UI edit; route=%#v", resp)
+	}
 }
