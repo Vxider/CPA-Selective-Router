@@ -437,6 +437,84 @@ func TestRouteModelOpenAIResponsesVisionToolChoice(t *testing.T) {
 	}
 }
 
+func TestRouteModelOpenAIResponsesImageGenerationIntentDoesNotRouteByDefault(t *testing.T) {
+	currentConfig.Store(pluginConfig{
+		Enabled:              true,
+		RouteProvider:        "codex",
+		RouteModel:           "gpt-5.5",
+		ImageProvider:        "cliproxyapi",
+		ImageModel:           "gpt-5.4",
+		ImageToolModel:       "gpt-image-2",
+		RouteImageGeneration: true,
+		Models:               []string{"gpt-5.4-mini"},
+	})
+
+	resp := routeForTest(t, rpcModelRouteRequest{
+		ModelRouteRequest: pluginapi.ModelRouteRequest{
+			SourceFormat:       "openai-response",
+			RequestedModel:     "gpt-5.4-mini",
+			AvailableProviders: []string{"cliproxyapi", "codex"},
+			Body:               []byte(`{"model":"gpt-5.4-mini","input":"生成一张赛博朋克城市夜景图片"}`),
+		},
+	})
+
+	if resp.Handled {
+		t.Fatalf("Handled = true, want false when image_route_override is false")
+	}
+}
+
+func TestRouteModelOpenAIResponsesImageGenerationIntentRoutesWhenOverrideEnabled(t *testing.T) {
+	currentConfig.Store(pluginConfig{
+		Enabled:              true,
+		ImageProvider:        "cliproxyapi",
+		ImageModel:           "gpt-5.4",
+		ImageToolModel:       "gpt-image-2",
+		ImageRouteOverride:   true,
+		RouteImageGeneration: true,
+		Models:               []string{"gpt-5.4-mini"},
+	})
+
+	resp := routeForTest(t, rpcModelRouteRequest{
+		ModelRouteRequest: pluginapi.ModelRouteRequest{
+			SourceFormat:       "openai-response",
+			RequestedModel:     "gpt-5.4-mini",
+			AvailableProviders: []string{"cliproxyapi"},
+			Body:               []byte(`{"model":"gpt-5.4-mini","input":"生成一张赛博朋克城市夜景图片"}`),
+		},
+	})
+
+	if !resp.Handled {
+		t.Fatalf("Handled = false, want true")
+	}
+	if resp.Target != "cliproxyapi" || resp.TargetModel != "gpt-5.4" {
+		t.Fatalf("route = %#v, want provider cliproxyapi/gpt-5.4", resp)
+	}
+}
+
+func TestRouteModelOpenAIResponsesImageGenerationTroubleshootingNotRouted(t *testing.T) {
+	currentConfig.Store(pluginConfig{
+		Enabled:              true,
+		ImageProvider:        "cliproxyapi",
+		ImageModel:           "gpt-5.4",
+		ImageToolModel:       "gpt-image-2",
+		RouteImageGeneration: true,
+		Models:               []string{"gpt-5.4-mini"},
+	})
+
+	resp := routeForTest(t, rpcModelRouteRequest{
+		ModelRouteRequest: pluginapi.ModelRouteRequest{
+			SourceFormat:       "openai-response",
+			RequestedModel:     "gpt-5.4-mini",
+			AvailableProviders: []string{"cliproxyapi"},
+			Body:               []byte(`{"model":"gpt-5.4-mini","input":"生成图片报错，插件能不能解决 image_gen 工具不可用"}`),
+		},
+	})
+
+	if resp.Handled {
+		t.Fatalf("Handled = true, want false for troubleshooting discussion")
+	}
+}
+
 func TestRouteModelOpenAIResponsesOldImageHistoryNotRouted(t *testing.T) {
 	currentConfig.Store(pluginConfig{
 		Enabled:       true,

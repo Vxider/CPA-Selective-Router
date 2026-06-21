@@ -39,6 +39,34 @@ func injectWebSearchTool(body []byte) ([]byte, bool) {
 	return out, true
 }
 
+func injectImageGenerationTool(body []byte, cfg pluginConfig) ([]byte, bool) {
+	var root map[string]any
+	if err := json.Unmarshal(body, &root); err != nil {
+		return nil, false
+	}
+	if hasImageGenerationToolDefinition(root["tools"]) {
+		return body, false
+	}
+	focus := currentUserInput(root["input"])
+	if !containsImageGenerationIntent(focus) && !containsImageGenerationInvocation(focus) {
+		return body, false
+	}
+	tool := map[string]any{
+		"type":          "image_generation",
+		"output_format": "png",
+	}
+	if model := strings.TrimSpace(cfg.ImageToolModel); model != "" {
+		tool["model"] = model
+	}
+	tools, _ := root["tools"].([]any)
+	root["tools"] = append(tools, tool)
+	out, err := json.Marshal(root)
+	if err != nil {
+		return nil, false
+	}
+	return out, true
+}
+
 func hasWebSearchToolDefinition(value any) bool {
 	tools, ok := value.([]any)
 	if !ok {

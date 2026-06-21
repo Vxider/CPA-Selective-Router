@@ -78,6 +78,49 @@ func TestInjectedWebSearchToolRoutesWithSearchIntent(t *testing.T) {
 	}
 }
 
+func TestNormalizeRequestInjectsImageGenerationToolForImageIntent(t *testing.T) {
+	currentConfig.Store(pluginConfig{
+		Enabled:              true,
+		RouteImageGeneration: true,
+		ImageToolModel:       "gpt-image-2",
+		Models:               []string{"gpt-5.4-mini"},
+	})
+
+	body := normalizeForTest(t, pluginapi.RequestTransformRequest{
+		FromFormat: "openai-response",
+		ToFormat:   "openai-response",
+		Model:      "gpt-5.4-mini",
+		Body:       []byte(`{"model":"gpt-5.4-mini","input":"生成一张红色小猫图片"}`),
+	})
+
+	if got := gjson.GetBytes(body, "tools.0.type").String(); got != "image_generation" {
+		t.Fatalf("tools.0.type = %q, want image_generation; body=%s", got, body)
+	}
+	if got := gjson.GetBytes(body, "tools.0.model").String(); got != "gpt-image-2" {
+		t.Fatalf("tools.0.model = %q, want gpt-image-2; body=%s", got, body)
+	}
+}
+
+func TestNormalizeRequestDoesNotInjectImageGenerationToolForTroubleshooting(t *testing.T) {
+	currentConfig.Store(pluginConfig{
+		Enabled:              true,
+		RouteImageGeneration: true,
+		ImageToolModel:       "gpt-image-2",
+		Models:               []string{"gpt-5.4-mini"},
+	})
+
+	body := normalizeForTest(t, pluginapi.RequestTransformRequest{
+		FromFormat: "openai-response",
+		ToFormat:   "openai-response",
+		Model:      "gpt-5.4-mini",
+		Body:       []byte(`{"model":"gpt-5.4-mini","input":"生成图片报错，插件能不能解决 image_gen 工具不可用"}`),
+	})
+
+	if gjson.GetBytes(body, "tools").Exists() {
+		t.Fatalf("tools exists for troubleshooting text; body=%s", body)
+	}
+}
+
 func normalizeForTest(t *testing.T, req pluginapi.RequestTransformRequest) []byte {
 	t.Helper()
 	raw, err := json.Marshal(req)

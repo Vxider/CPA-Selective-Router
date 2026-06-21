@@ -32,6 +32,9 @@ func routeTargetForRequest(req rpcModelRouteRequest, cfg pluginConfig) (bool, st
 	if len(req.Body) == 0 {
 		return false, "", ""
 	}
+	if cfg.RouteImageGeneration && cfg.ImageRouteOverride && hasImageGenerationRouteSignal(req.Body) {
+		return true, cfg.ImageProvider, cfg.ImageModel
+	}
 	if cfg.RouteWebSearch && hasWebSearchRouteSignal(req.Body) {
 		return true, cfg.RouteProvider, cfg.RouteModel
 	}
@@ -201,6 +204,135 @@ func isWebSearchType(value string) bool {
 	default:
 		return false
 	}
+}
+
+func hasImageGenerationRouteSignal(body []byte) bool {
+	if hasExplicitImageGenerationToolChoice(body) {
+		return true
+	}
+	var root map[string]any
+	if err := json.Unmarshal(body, &root); err != nil {
+		return false
+	}
+	focus := currentUserInput(root["input"])
+	if containsImageGenerationInvocation(focus) {
+		return true
+	}
+	if containsImageGenerationIntent(focus) {
+		return true
+	}
+	return hasImageGenerationToolDefinition(root["tools"]) && containsImageGenerationIntent(root["instructions"])
+}
+
+func hasExplicitImageGenerationToolChoice(body []byte) bool {
+	toolChoiceType := gjson.GetBytes(body, "tool_choice.type").String()
+	if isImageGenerationType(toolChoiceType) {
+		return true
+	}
+	toolChoiceName := gjson.GetBytes(body, "tool_choice.name").String()
+	if toolChoiceName == "" {
+		toolChoiceName = gjson.GetBytes(body, "tool_choice.function.name").String()
+	}
+	return isImageGenerationType(toolChoiceName)
+}
+
+func hasImageGenerationToolDefinition(value any) bool {
+	tools, ok := value.([]any)
+	if !ok {
+		return false
+	}
+	for _, item := range tools {
+		tool, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if isImageGenerationType(stringValue(tool["type"])) || isImageGenerationType(stringValue(tool["name"])) {
+			return true
+		}
+		if fn, ok := tool["function"].(map[string]any); ok && isImageGenerationType(stringValue(fn["name"])) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsImageGenerationInvocation(value any) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		if isImageGenerationType(stringValue(typed["type"])) || isImageGenerationType(stringValue(typed["name"])) {
+			return true
+		}
+		for _, child := range typed {
+			if containsImageGenerationInvocation(child) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range typed {
+			if containsImageGenerationInvocation(child) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func containsImageGenerationIntent(value any) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		for _, child := range typed {
+			if containsImageGenerationIntent(child) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range typed {
+			if containsImageGenerationIntent(child) {
+				return true
+			}
+		}
+	case string:
+		return isImageGenerationIntentString(typed)
+	}
+	return false
+}
+
+func isImageGenerationType(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "image_generation", "image_gen", "imagegen", "generate_image", "gpt-image-2":
+		return true
+	default:
+		return false
+	}
+}
+
+func isImageGenerationIntentString(value string) bool {
+	lower := strings.ToLower(strings.TrimSpace(value))
+	if lower == "" {
+		return false
+	}
+	if containsAny(lower, "报错", "错误", "插件", "tool", "工具", "无法", "不能", "失败", "error", "plugin") {
+		return false
+	}
+	if containsAny(lower, "generate an image", "create an image", "draw an image", "make an image", "image generation", "text-to-image") {
+		return true
+	}
+	if strings.Contains(lower, "生成") && containsAny(lower, "图片", "图像", "一张图", "插画", "海报", "头像") {
+		return true
+	}
+	if strings.Contains(lower, "画") && containsAny(lower, "图片", "图像", "一张", "插画", "海报", "头像") {
+		return true
+	}
+	return false
+}
+
+func containsAny(value string, needles ...string) bool {
+	for _, needle := range needles {
+		if strings.Contains(value, needle) {
+			return true
+		}
+	}
+	return false
 }
 
 func hasVisionTool(body []byte) bool {

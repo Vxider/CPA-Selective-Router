@@ -70,15 +70,20 @@ type lifecycleRequest struct {
 }
 
 type pluginConfig struct {
-	Enabled        bool     `yaml:"enabled"`
-	RouteProvider  string   `yaml:"route_provider"`
-	RouteModel     string   `yaml:"route_model"`
-	RouteCompact   bool     `yaml:"route_compact"`
-	RouteWebSearch bool     `yaml:"route_web_search"`
-	RouteVision    bool     `yaml:"route_vision"`
-	DebugRoutes    bool     `yaml:"debug_routes"`
-	Models         []string `yaml:"models"`
-	ExcludedModels []string `yaml:"excluded_models"`
+	Enabled              bool     `yaml:"enabled"`
+	RouteProvider        string   `yaml:"route_provider"`
+	RouteModel           string   `yaml:"route_model"`
+	ImageProvider        string   `yaml:"image_provider"`
+	ImageModel           string   `yaml:"image_model"`
+	ImageToolModel       string   `yaml:"image_tool_model"`
+	ImageRouteOverride   bool     `yaml:"image_route_override"`
+	RouteCompact         bool     `yaml:"route_compact"`
+	RouteWebSearch       bool     `yaml:"route_web_search"`
+	RouteVision          bool     `yaml:"route_vision"`
+	RouteImageGeneration bool     `yaml:"route_image_generation"`
+	DebugRoutes          bool     `yaml:"debug_routes"`
+	Models               []string `yaml:"models"`
+	ExcludedModels       []string `yaml:"excluded_models"`
 }
 
 type registration struct {
@@ -178,11 +183,23 @@ func configure(raw []byte) error {
 	}
 	cfg.RouteProvider = strings.TrimSpace(cfg.RouteProvider)
 	cfg.RouteModel = strings.TrimSpace(cfg.RouteModel)
+	cfg.ImageProvider = strings.TrimSpace(cfg.ImageProvider)
+	cfg.ImageModel = strings.TrimSpace(cfg.ImageModel)
+	cfg.ImageToolModel = strings.TrimSpace(cfg.ImageToolModel)
 	if cfg.RouteProvider == "" {
 		cfg.RouteProvider = "codex"
 	}
 	if cfg.RouteModel == "" {
 		cfg.RouteModel = "gpt-5.5"
+	}
+	if cfg.ImageProvider == "" {
+		cfg.ImageProvider = cfg.RouteProvider
+	}
+	if cfg.ImageModel == "" {
+		cfg.ImageModel = cfg.RouteModel
+	}
+	if cfg.ImageToolModel == "" {
+		cfg.ImageToolModel = "gpt-image-2"
 	}
 	currentConfig.Store(cfg)
 	return nil
@@ -190,12 +207,17 @@ func configure(raw []byte) error {
 
 func defaultPluginConfig() pluginConfig {
 	return pluginConfig{
-		Enabled:        true,
-		RouteProvider:  "codex",
-		RouteModel:     "gpt-5.5",
-		RouteCompact:   true,
-		RouteWebSearch: true,
-		RouteVision:    true,
+		Enabled:              true,
+		RouteProvider:        "codex",
+		RouteModel:           "gpt-5.5",
+		ImageProvider:        "codex",
+		ImageModel:           "gpt-5.4",
+		ImageToolModel:       "gpt-image-2",
+		ImageRouteOverride:   false,
+		RouteCompact:         true,
+		RouteWebSearch:       true,
+		RouteVision:          true,
+		RouteImageGeneration: true,
 	}
 }
 
@@ -220,11 +242,16 @@ func pluginRegistration() registration {
 				{Name: "enabled", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Enable capability-based route conversion."},
 				{Name: "route_provider", Type: pluginapi.ConfigFieldTypeString, Description: "Provider used for direct model_router route conversion."},
 				{Name: "route_model", Type: pluginapi.ConfigFieldTypeString, Description: "Target model used for direct model_router route conversion."},
+				{Name: "image_provider", Type: pluginapi.ConfigFieldTypeString, Description: "Provider used for image-generation-capable chat route conversion. Defaults to route_provider."},
+				{Name: "image_model", Type: pluginapi.ConfigFieldTypeString, Description: "Chat model used for image-generation-capable route conversion. Default: route_model."},
+				{Name: "image_tool_model", Type: pluginapi.ConfigFieldTypeString, Description: "Model used by the injected image_generation tool. Default: gpt-image-2."},
+				{Name: "image_route_override", Type: pluginapi.ConfigFieldTypeBoolean, Description: "When true, route image generation requests to image_provider/image_model. Default: false."},
 				{Name: "models", Type: pluginapi.ConfigFieldTypeArray, Description: "Requested model allowlist. Empty means all models. Supports '*' wildcards, e.g. model-*."},
 				{Name: "excluded_models", Type: pluginapi.ConfigFieldTypeArray, Description: "Requested model denylist. Takes precedence over models. Supports '*' wildcards, e.g. model-*."},
 				{Name: "route_compact", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Route matching compact response requests to route_provider/route_model. Default: true."},
 				{Name: "route_web_search", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Route matching web search requests to route_provider/route_model. Also injects a native web_search tool for matching response requests with search intent."},
 				{Name: "route_vision", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Route matching requests with image input to the configured capability route."},
+				{Name: "route_image_generation", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Route explicit image generation requests to image_provider/image_model and inject image_generation tool."},
 			},
 		},
 		Capabilities: registrationCapability{
@@ -243,6 +270,11 @@ func normalizeRequest(raw []byte) ([]byte, error) {
 	body := req.Body
 	if cfg.Enabled && cfg.RouteWebSearch && modelAllowed(req.Model, cfg) && isResponseTransformCandidate(req) {
 		if injected, changed := injectWebSearchTool(body); changed {
+			body = injected
+		}
+	}
+	if cfg.Enabled && cfg.RouteImageGeneration && modelAllowed(req.Model, cfg) && isResponseTransformCandidate(req) {
+		if injected, changed := injectImageGenerationTool(body, cfg); changed {
 			body = injected
 		}
 	}
