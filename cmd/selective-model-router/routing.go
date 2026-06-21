@@ -33,7 +33,7 @@ func routeTargetForRequest(req rpcModelRouteRequest, cfg pluginConfig) (bool, st
 		return false, "", ""
 	}
 	if cfg.RouteImageGeneration && cfg.ImageRouteOverride && hasImageGenerationRouteSignal(req.Body) {
-		return true, cfg.ImageProvider, cfg.ImageModel
+		return true, cfg.RouteProvider, cfg.RouteModel
 	}
 	if cfg.RouteWebSearch && hasWebSearchRouteSignal(req.Body) {
 		return true, cfg.RouteProvider, cfg.RouteModel

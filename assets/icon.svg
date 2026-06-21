@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a1622"/>
+      <stop offset="1" stop-color="#163042"/>
+    </linearGradient>
+    <linearGradient id="hub" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5eead4"/>
+      <stop offset="1" stop-color="#10b981"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- square background -->
+  <rect x="0" y="0" width="256" height="256" rx="48" fill="url(#bg)"/>
+
+  <!-- subtle routing grid -->
+  <g fill="#1d3a52" opacity="0.5">
+    <circle cx="64" cy="64" r="2.5"/>
+    <circle cx="192" cy="64" r="2.5"/>
+    <circle cx="64" cy="192" r="2.5"/>
+    <circle cx="192" cy="192" r="2.5"/>
+  </g>
+
+  <!-- connectors: three paths from hub, one selectively lit -->
+  <g stroke-linecap="round" fill="none">
+    <line x1="128" y1="128" x2="64" y2="64" stroke="#1f4458" stroke-width="8"/>
+    <line x1="128" y1="128" x2="192" y2="64" stroke="#1f4458" stroke-width="8"/>
+    <line x1="128" y1="128" x2="128" y2="200" stroke="#22d3ee" stroke-width="10"/>
+  </g>
+
+  <!-- glow under the active path -->
+  <circle cx="128" cy="200" r="26" fill="url(#glow)"/>
+
+  <!-- endpoint nodes -->
+  <g>
+    <rect x="48" y="48" width="32" height="32" rx="8" fill="#274b63"/>
+    <rect x="176" y="48" width="32" height="32" rx="8" fill="#274b63"/>
+    <rect x="112" y="184" width="32" height="32" rx="8" fill="#22d3ee"/>
+  </g>
+
+  <!-- central hub diamond -->
+  <g transform="rotate(45 128 128)">
+    <rect x="93" y="93" width="70" height="70" rx="14" fill="url(#hub)"/>
+    <rect x="108" y="108" width="40" height="40" rx="8" fill="#0a1622"/>
+  </g>
+</svg>

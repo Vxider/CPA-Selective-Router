@@ -17,7 +17,7 @@ It performs route conversion for matching requests. It can also inject a native 
 
 - Routes image-capable response requests when `route_vision` is enabled.
 - Injects an `image_generation` tool using `image_tool_model` for explicit image generation requests when `route_image_generation` is enabled.
-- Optionally routes image generation requests to `image_provider`/`image_model` when `image_route_override` is enabled.
+- Optionally routes image generation requests to `route_provider`/`route_model` when `image_route_override` is enabled.
 - Routes web-search-capable response requests when `route_web_search` is enabled.
 - Injects a native web search tool for explicit search intent when `route_web_search` is enabled.
 - Routes compact response requests when `route_compact` is enabled.
@@ -66,8 +66,6 @@ plugins:
       priority: 50
       route_provider: "<provider>"
       route_model: "<target-model>"
-      image_provider: "codex"
-      image_model: "gpt-5.4"
       image_tool_model: "gpt-image-2"
       image_route_override: false
       models: []          # requested model allowlist; empty = all models
@@ -85,10 +83,8 @@ plugins:
 | `enabled` | Disable routing when false. |
 | `route_provider` | Provider used for direct `model_router` route conversion. |
 | `route_model` | Target model used for direct `model_router` route conversion. |
-| `image_provider` | Provider used for image-generation-capable route conversion. Defaults to `route_provider`. |
-| `image_model` | Chat model used for image-generation-capable route conversion. Default: `route_model`. |
 | `image_tool_model` | Model used by the injected `image_generation` tool. Default: `gpt-image-2`. |
-| `image_route_override` | Route image generation requests to `image_provider`/`image_model` instead of preserving the host's normal model routing. Default: `false`. |
+| `image_route_override` | Route image generation requests to `route_provider`/`route_model` instead of preserving the host's normal model routing. Default: `false`. |
 | `models` | Requested model allowlist. Empty means all models. Supports `*` wildcards, e.g. `model-*`. |
 | `excluded_models` | Requested model denylist. Takes precedence over `models`. Supports `*` wildcards, e.g. `model-*`. |
 | `route_compact` | Route matching compact response requests directly to `route_provider`/`route_model`. Default: `true`. |

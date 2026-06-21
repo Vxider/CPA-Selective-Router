@@ -442,8 +442,6 @@ func TestRouteModelOpenAIResponsesImageGenerationIntentDoesNotRouteByDefault(t *
 		Enabled:              true,
 		RouteProvider:        "codex",
 		RouteModel:           "gpt-5.5",
-		ImageProvider:        "cliproxyapi",
-		ImageModel:           "gpt-5.4",
 		ImageToolModel:       "gpt-image-2",
 		RouteImageGeneration: true,
 		Models:               []string{"gpt-5.4-mini"},
@@ -466,8 +464,8 @@ func TestRouteModelOpenAIResponsesImageGenerationIntentDoesNotRouteByDefault(t *
 func TestRouteModelOpenAIResponsesImageGenerationIntentRoutesWhenOverrideEnabled(t *testing.T) {
 	currentConfig.Store(pluginConfig{
 		Enabled:              true,
-		ImageProvider:        "cliproxyapi",
-		ImageModel:           "gpt-5.4",
+		RouteProvider:        "cliproxyapi",
+		RouteModel:           "gpt-5.4",
 		ImageToolModel:       "gpt-image-2",
 		ImageRouteOverride:   true,
 		RouteImageGeneration: true,
@@ -494,8 +492,8 @@ func TestRouteModelOpenAIResponsesImageGenerationIntentRoutesWhenOverrideEnabled
 func TestRouteModelOpenAIResponsesImageGenerationFollowupRoutesWhenOverrideEnabled(t *testing.T) {
 	currentConfig.Store(pluginConfig{
 		Enabled:              true,
-		ImageProvider:        "codex",
-		ImageModel:           "gpt-5.5",
+		RouteProvider:        "codex",
+		RouteModel:           "gpt-5.5",
 		ImageToolModel:       "gpt-image-2",
 		ImageRouteOverride:   true,
 		RouteImageGeneration: true,
@@ -529,8 +527,8 @@ func TestRouteModelOpenAIResponsesImageGenerationFollowupRoutesWhenOverrideEnabl
 func TestRouteModelOpenAIResponsesImageGenerationTroubleshootingNotRouted(t *testing.T) {
 	currentConfig.Store(pluginConfig{
 		Enabled:              true,
-		ImageProvider:        "cliproxyapi",
-		ImageModel:           "gpt-5.4",
+		RouteProvider:        "cliproxyapi",
+		RouteModel:           "gpt-5.4",
 		ImageToolModel:       "gpt-image-2",
 		RouteImageGeneration: true,
 		Models:               []string{"gpt-5.4-mini"},
