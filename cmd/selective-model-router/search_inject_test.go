@@ -101,6 +101,33 @@ func TestNormalizeRequestInjectsImageGenerationToolForImageIntent(t *testing.T) 
 	}
 }
 
+func TestNormalizeRequestKeepsImageGenerationToolForFollowup(t *testing.T) {
+	currentConfig.Store(pluginConfig{
+		Enabled:              true,
+		RouteImageGeneration: true,
+		ImageToolModel:       "gpt-image-2",
+		Models:               []string{"gpt-5.4-mini"},
+	})
+
+	body := normalizeForTest(t, pluginapi.RequestTransformRequest{
+		FromFormat: "openai-response",
+		ToFormat:   "openai-response",
+		Model:      "gpt-5.4-mini",
+		Body: []byte(`{
+			"model":"gpt-5.4-mini",
+			"input":[
+				{"type":"message","role":"user","content":[{"type":"input_text","text":"生成一张红色小猫图片"}]},
+				{"type":"message","role":"assistant","content":[{"type":"output_text","text":"done"}]},
+				{"type":"message","role":"user","content":[{"type":"input_text","text":"再来一张，换成蓝色"}]}
+			]
+		}`),
+	})
+
+	if got := gjson.GetBytes(body, "tools.0.type").String(); got != "image_generation" {
+		t.Fatalf("tools.0.type = %q, want image_generation; body=%s", got, body)
+	}
+}
+
 func TestNormalizeRequestDoesNotInjectImageGenerationToolForTroubleshooting(t *testing.T) {
 	currentConfig.Store(pluginConfig{
 		Enabled:              true,

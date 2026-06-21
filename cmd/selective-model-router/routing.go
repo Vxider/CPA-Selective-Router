@@ -221,6 +221,9 @@ func hasImageGenerationRouteSignal(body []byte) bool {
 	if containsImageGenerationIntent(focus) {
 		return true
 	}
+	if containsImageGenerationContinuationIntent(focus) && hasRecentImageGenerationContext(root["input"]) {
+		return true
+	}
 	return hasImageGenerationToolDefinition(root["tools"]) && containsImageGenerationIntent(root["instructions"])
 }
 
@@ -297,6 +300,64 @@ func containsImageGenerationIntent(value any) bool {
 	return false
 }
 
+func containsImageGenerationContinuationIntent(value any) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		for _, child := range typed {
+			if containsImageGenerationContinuationIntent(child) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range typed {
+			if containsImageGenerationContinuationIntent(child) {
+				return true
+			}
+		}
+	case string:
+		return isImageGenerationContinuationString(typed)
+	}
+	return false
+}
+
+func hasRecentImageGenerationContext(input any) bool {
+	return containsRecentImageGenerationContext(recentInputItems(input, 8))
+}
+
+func recentInputItems(input any, limit int) any {
+	items, ok := input.([]any)
+	if !ok {
+		return input
+	}
+	if limit > 0 && len(items) > limit {
+		return items[len(items)-limit:]
+	}
+	return items
+}
+
+func containsRecentImageGenerationContext(value any) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		if isImageGenerationType(stringValue(typed["type"])) || isImageGenerationType(stringValue(typed["name"])) {
+			return true
+		}
+		for _, child := range typed {
+			if containsRecentImageGenerationContext(child) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range typed {
+			if containsRecentImageGenerationContext(child) {
+				return true
+			}
+		}
+	case string:
+		return isImageGenerationIntentString(typed)
+	}
+	return false
+}
+
 func isImageGenerationType(value string) bool {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "image_generation", "image_gen", "imagegen", "generate_image", "gpt-image-2":
@@ -324,6 +385,32 @@ func isImageGenerationIntentString(value string) bool {
 		return true
 	}
 	return false
+}
+
+func isImageGenerationContinuationString(value string) bool {
+	lower := strings.ToLower(strings.TrimSpace(value))
+	if lower == "" {
+		return false
+	}
+	if containsAny(lower, "报错", "错误", "插件", "tool", "工具", "无法", "不能", "失败", "error", "plugin") {
+		return false
+	}
+	return containsAny(lower,
+		"再来一张",
+		"再生成",
+		"继续生成",
+		"再画",
+		"换成",
+		"改成",
+		"换一个",
+		"另一张",
+		"more like this",
+		"another one",
+		"generate another",
+		"make another",
+		"try again",
+		"change it to",
+	)
 }
 
 func containsAny(value string, needles ...string) bool {

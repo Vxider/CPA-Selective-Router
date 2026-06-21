@@ -48,7 +48,7 @@ func injectImageGenerationTool(body []byte, cfg pluginConfig) ([]byte, bool) {
 		return body, false
 	}
 	focus := currentUserInput(root["input"])
-	if !containsImageGenerationIntent(focus) && !containsImageGenerationInvocation(focus) {
+	if !hasImageGenerationInjectionSignal(root, focus) {
 		return body, false
 	}
 	tool := map[string]any{
@@ -65,6 +65,16 @@ func injectImageGenerationTool(body []byte, cfg pluginConfig) ([]byte, bool) {
 		return nil, false
 	}
 	return out, true
+}
+
+func hasImageGenerationInjectionSignal(root map[string]any, focus any) bool {
+	if containsImageGenerationIntent(focus) || containsImageGenerationInvocation(focus) {
+		return true
+	}
+	if containsImageGenerationContinuationIntent(focus) {
+		return hasRecentImageGenerationContext(root["input"])
+	}
+	return false
 }
 
 func hasWebSearchToolDefinition(value any) bool {

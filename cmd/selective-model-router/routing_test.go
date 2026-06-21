@@ -491,6 +491,41 @@ func TestRouteModelOpenAIResponsesImageGenerationIntentRoutesWhenOverrideEnabled
 	}
 }
 
+func TestRouteModelOpenAIResponsesImageGenerationFollowupRoutesWhenOverrideEnabled(t *testing.T) {
+	currentConfig.Store(pluginConfig{
+		Enabled:              true,
+		ImageProvider:        "codex",
+		ImageModel:           "gpt-5.5",
+		ImageToolModel:       "gpt-image-2",
+		ImageRouteOverride:   true,
+		RouteImageGeneration: true,
+		Models:               []string{"gpt-5.4"},
+	})
+
+	resp := routeForTest(t, rpcModelRouteRequest{
+		ModelRouteRequest: pluginapi.ModelRouteRequest{
+			SourceFormat:       "openai-response",
+			RequestedModel:     "gpt-5.4",
+			AvailableProviders: []string{"codex"},
+			Body: []byte(`{
+				"model":"gpt-5.4",
+				"input":[
+					{"type":"message","role":"user","content":[{"type":"input_text","text":"生成一张红色小猫图片"}]},
+					{"type":"message","role":"assistant","content":[{"type":"output_text","text":"已生成。"}]},
+					{"type":"message","role":"user","content":[{"type":"input_text","text":"再来一张，换成蓝色"}]}
+				]
+			}`),
+		},
+	})
+
+	if !resp.Handled {
+		t.Fatalf("Handled = false, want true")
+	}
+	if resp.Target != "codex" || resp.TargetModel != "gpt-5.5" {
+		t.Fatalf("route = %#v, want provider codex/gpt-5.5", resp)
+	}
+}
+
 func TestRouteModelOpenAIResponsesImageGenerationTroubleshootingNotRouted(t *testing.T) {
 	currentConfig.Store(pluginConfig{
 		Enabled:              true,
