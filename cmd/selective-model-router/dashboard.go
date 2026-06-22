@@ -236,7 +236,7 @@ var CAT_COLORS={
   image_generation:"#f472b6",disabled:"#4f5b6b" ,route_provider_unavailable:"#fb7185"
 };
 var CAT_LABEL={
-  normal:"普通请求",compact:"Compact 压缩",auto_review:"Auto Review",web_search:"WebSearch",vision:"Visual",
+  normal:"direct",compact:"Compact",auto_review:"Auto Review",web_search:"WebSearch",vision:"Visual",
   image_generation:"Image Gen",disabled:"已禁用",route_provider_unavailable:"Provider 不可用"
 };
 var CAT_ORDER=["normal","web_search","vision","image_generation","auto_review","compact","route_provider_unavailable","disabled"];

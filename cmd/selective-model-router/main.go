@@ -307,8 +307,8 @@ func routeModel(raw []byte) ([]byte, error) {
 		return okEnvelope(pluginapi.ModelRouteResponse{Handled: false})
 	}
 	if !routeModelAllowed(req, cfg) {
-		debugRoute(req, cfg, "model_not_allowed", false)
-		recordRouteDecision(req, cfg, routeDecision{}, "model_not_allowed", false)
+		debugRoute(req, cfg, "no_match", false)
+		recordRouteDecision(req, cfg, routeDecision{}, "no_match", false)
 		return okEnvelope(pluginapi.ModelRouteResponse{Handled: false})
 	}
 	decision := routeTargetForRequest(req, cfg)
