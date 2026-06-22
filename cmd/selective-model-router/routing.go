@@ -9,6 +9,14 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+// routeDecision describes the routing outcome for one request.
+type routeDecision struct {
+	Handled  bool
+	Provider string
+	Model    string
+	Category string
+}
+
 func isResponseSourceFormat(source string) bool {
 	switch strings.ToLower(strings.TrimSpace(source)) {
 	case "responses", "openai-response", "openai-responses", "openai_responses":
@@ -19,41 +27,40 @@ func isResponseSourceFormat(source string) bool {
 }
 
 func shouldRouteResponse(req rpcModelRouteRequest, cfg pluginConfig) bool {
-	handled, _, _ := routeTargetForRequest(req, cfg)
-	return handled
+	return routeTargetForRequest(req, cfg).Handled
 }
 
-func routeTargetForRequest(req rpcModelRouteRequest, cfg pluginConfig) (bool, string, string) {
+func routeTargetForRequest(req rpcModelRouteRequest, cfg pluginConfig) routeDecision {
 	if !isResponseRouteCandidate(req) {
-		return false, "", ""
+		return routeDecision{}
 	}
 	if cfg.RouteCompact && isCompactResponseRequest(req) {
-		return true, cfg.RouteProvider, cfg.RouteModel
+		return routeDecision{Handled: true, Provider: cfg.RouteProvider, Model: cfg.RouteModel, Category: "compact"}
 	}
 	if cfg.RouteAutoReview && isAutoReviewRequest(req) {
-		return true, cfg.RouteProvider, cfg.RouteModel
+		return routeDecision{Handled: true, Provider: cfg.RouteProvider, Model: cfg.RouteModel, Category: "auto_review"}
 	}
 	if len(req.Body) == 0 {
-		return false, "", ""
+		return routeDecision{}
 	}
 	if cfg.RouteImageGeneration && strings.TrimSpace(cfg.ImageRouteProvider) != "" && hasImageGenerationRouteSignal(req.Body) {
 		return imageRouteTarget(cfg)
 	}
 	if cfg.RouteWebSearch && hasWebSearchRouteSignal(req.Body) {
-		return true, cfg.RouteProvider, cfg.RouteModel
+		return routeDecision{Handled: true, Provider: cfg.RouteProvider, Model: cfg.RouteModel, Category: "web_search"}
 	}
 	if cfg.RouteVision && (hasCurrentImageInput(req.Body) || hasExplicitVisionToolChoice(req.Body) || hasCurrentImagePathMention(req.Body)) {
-		return true, cfg.RouteProvider, cfg.RouteModel
+		return routeDecision{Handled: true, Provider: cfg.RouteProvider, Model: cfg.RouteModel, Category: "vision"}
 	}
-	return false, "", ""
+	return routeDecision{}
 }
 
-func imageRouteTarget(cfg pluginConfig) (bool, string, string) {
+func imageRouteTarget(cfg pluginConfig) routeDecision {
 	provider := strings.TrimSpace(cfg.ImageRouteProvider)
 	if provider == "" {
-		return false, "", ""
+		return routeDecision{}
 	}
-	return true, provider, cfg.RouteModel
+	return routeDecision{Handled: true, Provider: provider, Model: cfg.RouteModel, Category: "image_generation"}
 }
 
 func isAutoReviewRequest(req rpcModelRouteRequest) bool {

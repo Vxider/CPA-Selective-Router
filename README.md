@@ -100,6 +100,30 @@ plugins:
 - `cmd/selective-model-router/`: CLIProxyAPI dynamic plugin entrypoint.
 - `core/`, `plugin/`, `openai/`: reusable protocol-neutral library code kept for unit testing and future non-CLIProxyAPI embedding.
 
+## Dashboard
+
+When loaded, the plugin exposes a browser-navigable dashboard under the Management API plugin resource path:
+
+```text
+/v0/resource/plugins/selective-router/dashboard
+```
+
+It is linked from the plugin's management UI menu as "路由日志". The page shows:
+
+- Route-trigger statistics: total requests, handled route conversions, ordinary requests, and hit rate.
+- A compact recent-request progress strip with colored segments: ordinary requests are green, web-search routes are blue, and visual routes are yellow.
+- Per-category distribution (normal, compact, auto-review, web-search, vision, image-generation).
+- Breakdowns by route reason, target provider, and requested model.
+- A live, filterable log of route-hit decisions only (newest first), auto-refreshing every 3s.
+
+Sibling resource routes power the page:
+
+- `/v0/resource/plugins/selective-router/api/stats` - aggregated statistics JSON.
+- `/v0/resource/plugins/selective-router/api/logs` - recent events JSON.
+- `/v0/resource/plugins/selective-router/api/clear?confirm=1` - clears the in-memory log buffer.
+
+The log and statistics are kept only in an in-memory ring buffer (capacity 500) and reset on host restart.
+
 ## Notes
 
 - The actual CLIProxyAPI plugin ABI lives in `cmd/selective-model-router`.

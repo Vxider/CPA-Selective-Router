@@ -95,6 +95,7 @@ type registration struct {
 type registrationCapability struct {
 	ModelRouter       bool `json:"model_router"`
 	RequestNormalizer bool `json:"request_normalizer"`
+	ManagementAPI     bool `json:"management_api"`
 }
 
 type rpcModelRouteRequest struct {
@@ -161,6 +162,10 @@ func handleMethod(method string, request []byte) ([]byte, error) {
 		return routeModel(request)
 	case pluginabi.MethodRequestNormalize:
 		return normalizeRequest(request)
+	case pluginabi.MethodManagementRegister:
+		return okEnvelope(managementRegistration())
+	case pluginabi.MethodManagementHandle:
+		return handleManagement(request)
 	case pluginabi.MethodExecutorIdentifier:
 		return okEnvelope(map[string]string{"identifier": pluginIdentifier})
 	default:
@@ -252,8 +257,18 @@ func pluginRegistration() registration {
 		Capabilities: registrationCapability{
 			ModelRouter:       true,
 			RequestNormalizer: true,
+			ManagementAPI:     true,
 		},
 	}
+}
+
+func handleManagement(raw []byte) ([]byte, error) {
+	var req pluginapi.ManagementRequest
+	if err := json.Unmarshal(raw, &req); err != nil {
+		return nil, err
+	}
+	resp := handleManagementRequest(req)
+	return okEnvelope(resp)
 }
 
 func normalizeRequest(raw []byte) ([]byte, error) {
@@ -288,30 +303,36 @@ func routeModel(raw []byte) ([]byte, error) {
 	cfg := loadedConfig()
 	if !cfg.Enabled {
 		debugRoute(req, cfg, "disabled", false)
+		recordRouteDecision(req, cfg, routeDecision{}, "disabled", false)
 		return okEnvelope(pluginapi.ModelRouteResponse{Handled: false})
 	}
 	if !routeModelAllowed(req, cfg) {
 		debugRoute(req, cfg, "model_not_allowed", false)
+		recordRouteDecision(req, cfg, routeDecision{}, "model_not_allowed", false)
 		return okEnvelope(pluginapi.ModelRouteResponse{Handled: false})
 	}
-	if handled, provider, model := routeTargetForRequest(req, cfg); handled {
-		if provider == "" || !hasProvider(req.AvailableProviders, provider) {
+	decision := routeTargetForRequest(req, cfg)
+	if decision.Handled {
+		if decision.Provider == "" || !hasProvider(req.AvailableProviders, decision.Provider) {
 			debugRoute(req, cfg, "route_provider_unavailable", false)
+			recordRouteDecision(req, cfg, decision, "route_provider_unavailable", false)
 			return okEnvelope(pluginapi.ModelRouteResponse{
 				Handled: false,
 				Reason:  "route_provider_unavailable",
 			})
 		}
 		debugRoute(req, cfg, "capability_route_conversion", true)
+		recordRouteDecision(req, cfg, decision, "capability_route_conversion", true)
 		return okEnvelope(pluginapi.ModelRouteResponse{
 			Handled:     true,
 			TargetKind:  pluginapi.ModelRouteTargetProvider,
-			Target:      provider,
-			TargetModel: model,
+			Target:      decision.Provider,
+			TargetModel: decision.Model,
 			Reason:      "capability_route_conversion",
 		})
 	}
 	debugRoute(req, cfg, "no_match", false)
+	recordRouteDecision(req, cfg, decision, "no_match", false)
 	return okEnvelope(pluginapi.ModelRouteResponse{Handled: false})
 }
 
@@ -319,8 +340,10 @@ func debugRoute(req rpcModelRouteRequest, cfg pluginConfig, reason string, handl
 	if !cfg.DebugRoutes {
 		return
 	}
-	handledRoute, targetProvider, targetModel := routeTargetForRequest(req, cfg)
-	if !handledRoute {
+	decision := routeTargetForRequest(req, cfg)
+	targetProvider := decision.Provider
+	targetModel := decision.Model
+	if !decision.Handled {
 		targetProvider = ""
 		targetModel = ""
 	}
