@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -254,6 +255,7 @@ func orderedCategories(counts map[string]int) []categoryCount {
 		"image_generation":           true,
 		"disabled":                   false,
 		"route_provider_unavailable": false,
+		"rectifier":                  true,
 	}
 	out := make([]categoryCount, 0, len(counts))
 	for name, count := range counts {
@@ -307,5 +309,22 @@ func recordRouteDecision(req rpcModelRouteRequest, cfg pluginConfig, decision ro
 		ev.TargetModel = strings.TrimSpace(decision.Model)
 	}
 	_ = cfg
+	routeLog.record(ev)
+}
+
+// recordRectifierDecision records a rectifier injection event.
+func recordRectifierDecision(phase string, count int) {
+	reason := "orphan_call_rectified"
+	if phase == "non_stream" {
+		reason = "orphan_call_rectified_non_stream"
+	}
+	ev := routeLogEvent{
+		Phase:          "rectify",
+		Handled:        true,
+		Reason:         reason,
+		Category:       "rectifier",
+		TargetProvider: "synthetic",
+		TargetModel:    fmt.Sprintf("%d output(s)", count),
+	}
 	routeLog.record(ev)
 }

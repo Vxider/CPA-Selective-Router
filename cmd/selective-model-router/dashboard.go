@@ -233,13 +233,13 @@ tbody tr:hover{background:rgba(255,255,255,.02)}
 <script>
 var CAT_COLORS={
   normal:"#34d399",compact:"#2dd4bf",auto_review:"#a78bfa",web_search:"#38bdf8",vision:"#fbbf24",
-  image_generation:"#f472b6",disabled:"#4f5b6b" ,route_provider_unavailable:"#fb7185"
+  image_generation:"#f472b6",disabled:"#4f5b6b" ,route_provider_unavailable:"#fb7185",rectifier:"#c084fc"
 };
 var CAT_LABEL={
   normal:"direct",compact:"Compact",auto_review:"Auto Review",web_search:"WebSearch",vision:"Visual",
-  image_generation:"Image Gen",disabled:"已禁用",route_provider_unavailable:"Provider 不可用"
+  image_generation:"Image Gen",disabled:"已禁用",route_provider_unavailable:"Provider 不可用",rectifier:"Rectifier"
 };
-var CAT_ORDER=["normal","web_search","vision","image_generation","auto_review","compact","route_provider_unavailable","disabled"];
+var CAT_ORDER=["normal","web_search","vision","image_generation","auto_review","compact","route_provider_unavailable","rectifier","disabled"];
 var lastStats=null;
 var lastEvents=[];
 var activeFilter="all";
@@ -353,6 +353,7 @@ function moveTip(e){
   cellTip.style.left=x+"px";cellTip.style.top=y+"px";
 }
 function renderStats(s){
+  console.log("renderStats:", s.total_routes, s.buckets?.length);
   lastStats=s;
   var total=s.total_routes||0;
   var handled=s.handled_routes||0;

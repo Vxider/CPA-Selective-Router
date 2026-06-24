@@ -84,6 +84,7 @@ type pluginConfig struct {
 	DebugRoutes          bool     `yaml:"debug_routes"`
 	Models               []string `yaml:"models"`
 	ExcludedModels       []string `yaml:"excluded_models"`
+	RectifyTranscript    bool     `yaml:"rectify_transcript"`
 }
 
 type registration struct {
@@ -96,6 +97,8 @@ type registrationCapability struct {
 	ModelRouter       bool `json:"model_router"`
 	RequestNormalizer bool `json:"request_normalizer"`
 	ManagementAPI     bool `json:"management_api"`
+	StreamChunkInterceptor bool `json:"response_stream_interceptor"`
+	ResponseInterceptor   bool `json:"response_interceptor"`
 }
 
 type rpcModelRouteRequest struct {
@@ -162,6 +165,10 @@ func handleMethod(method string, request []byte) ([]byte, error) {
 		return routeModel(request)
 	case pluginabi.MethodRequestNormalize:
 		return normalizeRequest(request)
+	case pluginabi.MethodResponseInterceptStreamChunk:
+		return interceptStreamChunkRequest(request)
+	case pluginabi.MethodResponseInterceptAfter:
+		return interceptResponseRequest(request)
 	case pluginabi.MethodManagementRegister:
 		return okEnvelope(managementRegistration())
 	case pluginabi.MethodManagementHandle:
@@ -218,6 +225,7 @@ func defaultPluginConfig() pluginConfig {
 		RouteWebSearch:       true,
 		RouteVision:          true,
 		RouteImageGeneration: true,
+		RectifyTranscript:    true,
 	}
 }
 
@@ -252,12 +260,15 @@ func pluginRegistration() registration {
 				{Name: "route_web_search", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Route matching web search requests to route_provider/route_model. Also injects a native web_search tool for matching response requests with search intent."},
 				{Name: "route_vision", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Route matching requests with image input to the configured capability route."},
 				{Name: "route_image_generation", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Inject image_generation tool for explicit image generation requests. When image_route_provider is set, image requests are routed to that provider using route_model."},
+				{Name: "rectify_transcript", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Synthesize missing tool call outputs in streamed responses. Fixes orphaned function_call/tool_search_call/custom_tool_call items that have no matching output. Default: true."},
 			},
 		},
 		Capabilities: registrationCapability{
 			ModelRouter:       true,
 			RequestNormalizer: true,
 			ManagementAPI:     true,
+			StreamChunkInterceptor: true,
+			ResponseInterceptor:     true,
 		},
 	}
 }
@@ -289,6 +300,41 @@ func normalizeRequest(raw []byte) ([]byte, error) {
 		}
 	}
 	return okEnvelope(pluginapi.PayloadResponse{Body: body})
+}
+
+func interceptStreamChunkRequest(raw []byte) ([]byte, error) {
+	var req pluginapi.StreamChunkInterceptRequest
+	if err := json.Unmarshal(raw, &req); err != nil {
+		return nil, err
+	}
+	cfg := loadedConfig()
+	if !cfg.Enabled || !cfg.RectifyTranscript {
+		return okEnvelope(pluginapi.StreamChunkInterceptResponse{})
+	}
+	modifiedBody, injectedCount, drop := patchChunkBody(req.Body, req.ChunkIndex, req.Metadata)
+	if drop {
+		return okEnvelope(pluginapi.StreamChunkInterceptResponse{DropChunk: true})
+	}
+	if injectedCount > 0 {
+		recordRectifierDecision("stream", injectedCount)
+	}
+	return okEnvelope(pluginapi.StreamChunkInterceptResponse{Body: modifiedBody})
+}
+
+func interceptResponseRequest(raw []byte) ([]byte, error) {
+	var req pluginapi.ResponseInterceptRequest
+	if err := json.Unmarshal(raw, &req); err != nil {
+		return nil, err
+	}
+	cfg := loadedConfig()
+	if !cfg.Enabled || !cfg.RectifyTranscript {
+		return okEnvelope(pluginapi.ResponseInterceptResponse{})
+	}
+	modified, injectedCount := ensureNoOrphanCallsInNonStreamResponse(req.Body)
+	if injectedCount > 0 {
+		recordRectifierDecision("non_stream", injectedCount)
+	}
+	return okEnvelope(pluginapi.ResponseInterceptResponse{Body: modified})
 }
 
 func imageGenerationInjectionAllowed(cfg pluginConfig) bool {
