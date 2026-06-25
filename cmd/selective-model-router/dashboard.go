@@ -361,8 +361,10 @@ function renderStats(s){
   var rate=total?Math.round(handled/total*100):0;
 
   var progress=document.getElementById("routeProgress");
-  var byCat=s.by_category||{};
-  var cats=orderedCategories(byCat);
+  // Aggregate categories from visible buckets only, so the legend matches the strip.
+  var bucketCat={};
+  if(s.buckets){for(var i=0;i<s.buckets.length;i++){var b=s.buckets[i];if(!b.total)continue;for(var cat in b.by_category){bucketCat[cat]=(bucketCat[cat]||0)+b.by_category[cat]}}}
+  var cats=orderedCategories(bucketCat);
   if(!total){progress.innerHTML='<div class="mono-empty">暂无路由记录</div>'}
   else{
     var h='<div class="route-meter">'
