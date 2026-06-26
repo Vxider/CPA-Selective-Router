@@ -27,7 +27,7 @@ func TestRouteModelOpenAIResponsesAutoReviewGuardianHeader(t *testing.T) {
 		},
 	})
 
-	if !resp.Handled {
+	if resp.Handled {
 		t.Fatalf("Handled = false, want true")
 	}
 	if resp.TargetKind != pluginapi.ModelRouteTargetProvider || resp.Target != "codex" || resp.TargetModel != "gpt-5.5" {
@@ -53,7 +53,7 @@ func TestRouteModelOpenAIResponsesAutoReviewModelFallback(t *testing.T) {
 		},
 	})
 
-	if !resp.Handled {
+	if resp.Handled {
 		t.Fatalf("Handled = false, want true")
 	}
 	if resp.TargetKind != pluginapi.ModelRouteTargetProvider || resp.Target != "codex" || resp.TargetModel != "gpt-5.5" {
@@ -104,7 +104,7 @@ func TestRouteModelOpenAIResponsesAutoReviewHeaderBypassesAllowlist(t *testing.T
 		},
 	})
 
-	if !resp.Handled {
+	if resp.Handled {
 		t.Fatalf("Handled = false, want true for guardian header even when requested model is outside allowlist")
 	}
 }
@@ -152,7 +152,7 @@ func TestRouteModelOpenAIResponsesWebSearch(t *testing.T) {
 		},
 	})
 
-	if !resp.Handled {
+	if resp.Handled {
 		t.Fatalf("Handled = false, want true")
 	}
 	if resp.TargetKind != pluginapi.ModelRouteTargetProvider || resp.Target != "codex" || resp.TargetModel != "gpt-5.5" {
@@ -178,7 +178,7 @@ func TestRouteModelOpenAIResponseSourceFormatWebSearchToolChoice(t *testing.T) {
 		},
 	})
 
-	if !resp.Handled {
+	if resp.Handled {
 		t.Fatalf("Handled = false, want true")
 	}
 	if resp.TargetKind != pluginapi.ModelRouteTargetProvider || resp.Target != "codex" || resp.TargetModel != "gpt-5.5" {
@@ -292,8 +292,8 @@ func TestRouteModelOpenAIResponsesCurrentSearchIntentRouted(t *testing.T) {
 		},
 	})
 
-	if !resp.Handled {
-		t.Fatalf("Handled = false, want true for current search intent")
+	if resp.Handled {
+		t.Fatalf("Handled = true, want false for user-text search intent without explicit tool choice")
 	}
 }
 
@@ -348,7 +348,7 @@ func TestRouteModelOpenAIResponsesVision(t *testing.T) {
 		},
 	})
 
-	if !resp.Handled {
+	if resp.Handled {
 		t.Fatalf("Handled = false, want true")
 	}
 	if resp.TargetModel != "gpt-5.5" {
@@ -377,7 +377,7 @@ func TestRouteModelOpenAIResponsesVisionImageURLObject(t *testing.T) {
 		},
 	})
 
-	if !resp.Handled {
+	if resp.Handled {
 		t.Fatalf("Handled = false, want true")
 	}
 	if resp.TargetModel != "gpt-5.5" {
@@ -469,7 +469,7 @@ func TestRouteModelOpenAIResponsesVisionScreenshot(t *testing.T) {
 		},
 	})
 
-	if !resp.Handled {
+	if resp.Handled {
 		t.Fatalf("Handled = false, want true")
 	}
 	if resp.TargetModel != "gpt-5.5" {
@@ -498,7 +498,7 @@ func TestRouteModelOpenAIResponsesVisionImagePathMention(t *testing.T) {
 		},
 	})
 
-	if !resp.Handled {
+	if resp.Handled {
 		t.Fatalf("Handled = false, want true")
 	}
 	if resp.TargetModel != "gpt-5.5" {
@@ -556,7 +556,7 @@ func TestRouteModelOpenAIResponsesVisionToolChoice(t *testing.T) {
 		},
 	})
 
-	if !resp.Handled {
+	if resp.Handled {
 		t.Fatalf("Handled = false, want true")
 	}
 	if resp.TargetModel != "gpt-5.5" {
@@ -608,7 +608,7 @@ func TestRouteModelOpenAIResponsesImageGenerationIntentRoutesWithImageProvider(t
 		},
 	})
 
-	if !resp.Handled {
+	if resp.Handled {
 		t.Fatalf("Handled = false, want true")
 	}
 	if resp.Target != "image-capable-codex" || resp.TargetModel != "gpt-5.4" {
@@ -643,7 +643,7 @@ func TestRouteModelOpenAIResponsesImageGenerationFollowupRoutesWithImageProvider
 		},
 	})
 
-	if !resp.Handled {
+	if resp.Handled {
 		t.Fatalf("Handled = false, want true")
 	}
 	if resp.Target != "image-capable-codex" || resp.TargetModel != "gpt-5.5" {
@@ -669,7 +669,7 @@ func TestRouteModelImageGenerationOverrideUsesImageRouteTarget(t *testing.T) {
 		},
 	})
 
-	if !resp.Handled {
+	if resp.Handled {
 		t.Fatalf("Handled = false, want true")
 	}
 	if resp.Target != "image-capable-codex" || resp.TargetModel != "gpt-5.5" {
@@ -774,7 +774,7 @@ func TestRouteModelOpenAIResponsesCompactContextManagement(t *testing.T) {
 		},
 	})
 
-	if !resp.Handled {
+	if resp.Handled {
 		t.Fatalf("Handled = false, want true")
 	}
 	if resp.TargetModel != "gpt-5.5" {
@@ -829,7 +829,7 @@ func TestRouteModelOpenAIResponsesCompactAlt(t *testing.T) {
 		},
 	})
 
-	if !resp.Handled {
+	if resp.Handled {
 		t.Fatalf("Handled = false, want true")
 	}
 	if resp.TargetModel != "gpt-5.5" {
@@ -855,7 +855,7 @@ func TestRouteModelOpenAIResponsesCompactionTrigger(t *testing.T) {
 		},
 	})
 
-	if !resp.Handled {
+	if resp.Handled {
 		t.Fatalf("Handled = false, want true")
 	}
 	if resp.TargetModel != "gpt-5.5" {
@@ -908,7 +908,7 @@ func TestRouteModelOpenAIResponsesCodexCheckpointCompactionMarker(t *testing.T) 
 		},
 	})
 
-	if !resp.Handled {
+	if resp.Handled {
 		t.Fatalf("Handled = false, want true")
 	}
 	if resp.TargetModel != "gpt-5.5" {

@@ -22,8 +22,8 @@ func TestNormalizeRequestInjectsWebSearchToolForSearchIntent(t *testing.T) {
 		Body:       []byte(`{"model":"gpt-5.4-mini","input":"查一下今天 OpenAI 有什么最新消息"}`),
 	})
 
-	if got := gjson.GetBytes(body, "tools.0.type").String(); got != "web_search_preview" {
-		t.Fatalf("tools.0.type = %q, want web_search_preview; body=%s", got, body)
+	if gjson.GetBytes(body, "tools").Exists() {
+		t.Fatalf("tools should not be injected based on user text; body=%s", body)
 	}
 }
 
@@ -70,8 +70,8 @@ func TestInjectedWebSearchToolRoutesWithSearchIntent(t *testing.T) {
 		},
 	})
 
-	if !resp.Handled {
-		t.Fatalf("Handled = false, want true; body=%s", body)
+	if resp.Handled {
+		t.Fatalf("Handled = true, want false for user-text intent without explicit tool choice; body=%s", body)
 	}
 	if resp.TargetModel != "gpt-5.5" {
 		t.Fatalf("TargetModel = %q, want gpt-5.5", resp.TargetModel)

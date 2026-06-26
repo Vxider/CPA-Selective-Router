@@ -94,11 +94,11 @@ type registration struct {
 }
 
 type registrationCapability struct {
-	ModelRouter       bool `json:"model_router"`
-	RequestNormalizer bool `json:"request_normalizer"`
-	ManagementAPI     bool `json:"management_api"`
+	ModelRouter            bool `json:"model_router"`
+	RequestNormalizer      bool `json:"request_normalizer"`
+	ManagementAPI          bool `json:"management_api"`
 	StreamChunkInterceptor bool `json:"response_stream_interceptor"`
-	ResponseInterceptor   bool `json:"response_interceptor"`
+	ResponseInterceptor    bool `json:"response_interceptor"`
 }
 
 type rpcModelRouteRequest struct {
@@ -264,11 +264,11 @@ func pluginRegistration() registration {
 			},
 		},
 		Capabilities: registrationCapability{
-			ModelRouter:       true,
-			RequestNormalizer: true,
-			ManagementAPI:     true,
+			ModelRouter:            true,
+			RequestNormalizer:      true,
+			ManagementAPI:          true,
 			StreamChunkInterceptor: true,
-			ResponseInterceptor:     true,
+			ResponseInterceptor:    true,
 		},
 	}
 }
@@ -289,11 +289,6 @@ func normalizeRequest(raw []byte) ([]byte, error) {
 	}
 	cfg := loadedConfig()
 	body := req.Body
-	if cfg.Enabled && cfg.RouteWebSearch && modelAllowed(req.Model, cfg) && isResponseTransformCandidate(req) {
-		if injected, changed := injectWebSearchTool(body); changed {
-			body = injected
-		}
-	}
 	if cfg.Enabled && cfg.RouteImageGeneration && imageGenerationInjectionAllowed(cfg) && modelAllowed(req.Model, cfg) && isResponseTransformCandidate(req) {
 		if injected, changed := injectImageGenerationTool(body, cfg); changed {
 			body = injected

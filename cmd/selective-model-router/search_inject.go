@@ -18,25 +18,12 @@ func isResponseTransformCandidate(req pluginapi.RequestTransformRequest) bool {
 	to := strings.ToLower(strings.TrimSpace(req.ToFormat))
 	return isResponseSourceFormat(from) || isResponseSourceFormat(to) || from == "openai" || to == "openai"
 }
-
 func injectWebSearchTool(body []byte) ([]byte, bool) {
-	var root map[string]any
-	if err := json.Unmarshal(body, &root); err != nil {
-		return nil, false
-	}
-	if hasWebSearchTool(body) || hasWebSearchToolDefinition(root["tools"]) {
-		return body, false
-	}
-	if !hasCurrentSearchIntent(root) {
-		return body, false
-	}
-	tools, _ := root["tools"].([]any)
-	root["tools"] = append(tools, map[string]any{"type": "web_search_preview"})
-	out, err := json.Marshal(root)
-	if err != nil {
-		return nil, false
-	}
-	return out, true
+	// No longer inject web_search tools based on user text.
+	// Injection is only valid when the request already carries an explicit
+	// tool_choice or web_search_call. In that case the tool definition is
+	// already present, so we simply return false.
+	return body, false
 }
 
 func injectImageGenerationTool(body []byte, cfg pluginConfig) ([]byte, bool) {

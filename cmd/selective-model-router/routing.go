@@ -225,7 +225,7 @@ func hasWebSearchRouteSignal(body []byte) bool {
 	if containsWebSearchInvocation(focus) {
 		return true
 	}
-	return hasWebSearchToolDefinition(root["tools"]) && hasCurrentSearchIntent(root)
+	return false
 }
 
 func isWebSearchType(value string) bool {
